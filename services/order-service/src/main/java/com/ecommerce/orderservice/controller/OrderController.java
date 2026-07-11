@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,22 +18,25 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/orders")
+@RequestMapping("/v1/orders")
 @RequiredArgsConstructor
 public class OrderController {
 
     private final OrderService orderService;
 
     /**
-     * POST /orders — place a new order.
-     * Authenticated. The JWT subject is used as the requesting user.
+     * POST /v1/orders — place a new order.
+     * Authenticated. Extracts the Bearer token and passes it to the service so
+     * product stock can be validated via the Product Service (circuit-breaker protected).
      */
     @PostMapping
     public ResponseEntity<ApiResponse<OrderResponse>> placeOrder(
             @Valid @RequestBody PlaceOrderRequest request,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             Authentication authentication) {
 
-        OrderResponse response = orderService.placeOrder(request);
+        String bearerToken = extractBearerToken(authHeader);
+        OrderResponse response = orderService.placeOrder(request, bearerToken);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
@@ -108,5 +112,12 @@ public class OrderController {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(a -> a.equals("ROLE_ADMIN"));
+    }
+
+    private String extractBearerToken(String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        return null;
     }
 }

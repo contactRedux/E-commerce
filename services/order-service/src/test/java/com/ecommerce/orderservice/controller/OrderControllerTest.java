@@ -85,9 +85,9 @@ class OrderControllerTest {
                 "idem-key-1"
         );
 
-        when(orderService.placeOrder(any(PlaceOrderRequest.class))).thenReturn(sampleResponse);
+        when(orderService.placeOrder(any(PlaceOrderRequest.class), any())).thenReturn(sampleResponse);
 
-        mockMvc.perform(post("/orders")
+        mockMvc.perform(post("/v1/orders")
                         .with(authentication(customerAuth()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -105,7 +105,7 @@ class OrderControllerTest {
                 "idem-key-1"
         );
 
-        mockMvc.perform(post("/orders")
+        mockMvc.perform(post("/v1/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized());
@@ -116,7 +116,7 @@ class OrderControllerTest {
         // Missing required fields
         String badBody = "{\"userId\":\"\",\"items\":[],\"shippingAddress\":\"\",\"idempotencyKey\":\"\"}";
 
-        mockMvc.perform(post("/orders")
+        mockMvc.perform(post("/v1/orders")
                         .with(authentication(customerAuth()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(badBody))
@@ -132,7 +132,7 @@ class OrderControllerTest {
     void getOrder_withValidJwt_returns200() throws Exception {
         when(orderService.getOrder(eq(orderId), eq(userId), eq(false))).thenReturn(sampleResponse);
 
-        mockMvc.perform(get("/orders/{id}", orderId)
+        mockMvc.perform(get("/v1/orders/{id}", orderId)
                         .with(authentication(customerAuth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(orderId.toString()));
@@ -152,7 +152,7 @@ class OrderControllerTest {
 
         when(orderService.updateStatus(eq(orderId), any(UpdateStatusRequest.class))).thenReturn(confirmedResponse);
 
-        mockMvc.perform(put("/orders/{id}/status", orderId)
+        mockMvc.perform(put("/v1/orders/{id}/status", orderId)
                         .with(authentication(adminAuth()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -164,7 +164,7 @@ class OrderControllerTest {
     void updateStatus_withCustomerJwt_returns403() throws Exception {
         UpdateStatusRequest req = new UpdateStatusRequest(OrderStatus.CONFIRMED);
 
-        mockMvc.perform(put("/orders/{id}/status", orderId)
+        mockMvc.perform(put("/v1/orders/{id}/status", orderId)
                         .with(authentication(customerAuth()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -182,7 +182,7 @@ class OrderControllerTest {
                         new BigDecimal("20.00"), "123 Main St",
                         List.of(), LocalDateTime.now(), LocalDateTime.now()));
 
-        mockMvc.perform(delete("/orders/{id}", orderId)
+        mockMvc.perform(delete("/v1/orders/{id}", orderId)
                         .with(authentication(customerAuth())))
                 .andExpect(status().isNoContent());
     }

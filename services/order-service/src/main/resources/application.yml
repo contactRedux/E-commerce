@@ -10,6 +10,13 @@ spring:
     username: ${ORDER_DB_USER:orderservice}
     password: ${ORDER_DB_PASSWORD:changeme_order}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+      pool-name: OrderServiceHikariPool
 
   jpa:
     hibernate:
@@ -46,16 +53,62 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
   metrics:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
 
 jwt:
   public-key: ${JWT_PUBLIC_KEY:}
 
 gateway:
   base-url: ${GATEWAY_BASE_URL:http://gateway:8080}
+
+# Zipkin distributed tracing
+management.zipkin.tracing.endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+
+# ── Resilience4j ─────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      productService:
+        register-health-indicator: true
+        sliding-window-size: 10
+        sliding-window-type: COUNT_BASED
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      cartService:
+        register-health-indicator: true
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  retry:
+    instances:
+      productService:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+          - java.net.ConnectException
+      cartService:
+        max-attempts: 3
+        wait-duration: 500ms
+  timelimiter:
+    instances:
+      productService:
+        timeout-duration: 3s
+      cartService:
+        timeout-duration: 3s
 
 logging:
   config: classpath:logback-spring.xml

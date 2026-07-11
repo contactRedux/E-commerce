@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Order Confirmed</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; margin: 0; background: #f4f4f5; color: #1a1a2e; }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.10); }
+    .header { background: #1d4ed8; padding: 28px 32px; }
+    .header h1 { margin: 0; color: #fff; font-size: 22px; }
+    .body { padding: 32px; }
+    .body p { margin: 0 0 12px; line-height: 1.6; }
+    .order-id { display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; border-radius: 4px; padding: 4px 10px; font-family: monospace; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-size: 13px; color: #475569; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+    .total-row td { font-weight: 700; background: #f8fafc; }
+    .footer { background: #f8fafc; padding: 20px 32px; font-size: 12px; color: #94a3b8; text-align: center; }
+    .btn { display: inline-block; background: #1d4ed8; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 600; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header"><h1>✅ Order Confirmed!</h1></div>
+  <div class="body">
+    <p>Hi there! Your order has been placed and is being processed.</p>
+    <p>Order ID: <span class="order-id" th:text="${orderId}">ORD-XXXXXXXX</span></p>
+    <p>Shipping to: <strong th:text="${shippingAddress}">123 Main St</strong></p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Qty</th>
+          <th>Unit Price</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="item : ${items}">
+          <td th:text="${item.productName}">Widget</td>
+          <td th:text="${item.quantity}">1</td>
+          <td th:text="'$' + ${item.unitPrice}">$9.99</td>
+          <td th:text="'$' + ${#numbers.formatDecimal(item.unitPrice * item.quantity, 1, 2)}">$9.99</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="3">Order Total</td>
+          <td th:text="'$' + ${totalAmount}">$9.99</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>We'll notify you when your order ships.</p>
+  </div>
+  <div class="footer">E-Commerce Platform · You received this email because you placed an order.</div>
+</div>
+</body>
+</html>

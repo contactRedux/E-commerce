@@ -9,6 +9,13 @@ spring:
     username: ${USER_DB_USER:userservice}
     password: ${USER_DB_PASSWORD:changeme_user}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+      pool-name: UserServiceHikariPool
   jpa:
     hibernate:
       ddl-auto: validate
@@ -44,11 +51,18 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
 
 jwt:
   private-key: ${JWT_PRIVATE_KEY:}
   public-key: ${JWT_PUBLIC_KEY:}
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  refresh-token-expiry-days: ${JWT_REFRESH_TOKEN_EXPIRY_DAYS:7}
 
 logging:
   config: classpath:logback-spring.xml

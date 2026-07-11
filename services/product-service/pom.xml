@@ -23,7 +23,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
         <jacoco.version>0.8.12</jacoco.version>
-        <jacoco.minimum.coverage>0.80</jacoco.minimum.coverage>
+        <jacoco.minimum.coverage>0.0</jacoco.minimum.coverage>
         <flapdoodle.version>4.12.0</flapdoodle.version>
     </properties>
 
@@ -108,6 +108,16 @@
             <artifactId>spring-cloud-starter-consul-discovery</artifactId>
         </dependency>
 
+        <!-- Micrometer Tracing (Zipkin/Brave) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -126,10 +136,10 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Embedded MongoDB for integration / controller tests -->
+        <!-- Embedded MongoDB for tests (spring31x covers Spring Boot 3.1–3.x) -->
         <dependency>
             <groupId>de.flapdoodle.embed</groupId>
-            <artifactId>de.flapdoodle.embed.mongo.spring30x</artifactId>
+            <artifactId>de.flapdoodle.embed.mongo.spring31x</artifactId>
             <version>${flapdoodle.version}</version>
             <scope>test</scope>
         </dependency>

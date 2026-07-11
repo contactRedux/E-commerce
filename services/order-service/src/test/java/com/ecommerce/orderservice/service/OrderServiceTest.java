@@ -26,6 +26,13 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for {@link OrderService}.
+ *
+ * <p>{@link ProductValidationService} is mocked so no HTTP calls are made.
+ * Tests verify the order placement flow, idempotency, stock validation gating,
+ * status transition rules, and cancellation rules.
+ */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
@@ -35,11 +42,14 @@ class OrderServiceTest {
     @Mock
     private KafkaProducerService kafkaProducerService;
 
+    @Mock
+    private ProductValidationService productValidationService;
+
     @InjectMocks
     private OrderService orderService;
 
     private Order sampleOrder;
-    private final UUID orderId   = UUID.randomUUID();
+    private final UUID   orderId = UUID.randomUUID();
     private final String userId  = "user-123";
 
     @BeforeEach
@@ -65,9 +75,9 @@ class OrderServiceTest {
         item.setOrder(sampleOrder);
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // placeOrder
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     void placeOrder_success_savesAndPublishesEvent() {
@@ -79,9 +89,10 @@ class OrderServiceTest {
         );
 
         when(orderRepository.findByIdempotencyKey("idem-key-1")).thenReturn(Optional.empty());
+        when(productValidationService.validateProductsAndStock(any(), eq("test-token"))).thenReturn(true);
         when(orderRepository.save(any(Order.class))).thenReturn(sampleOrder);
 
-        OrderResponse response = orderService.placeOrder(req);
+        OrderResponse response = orderService.placeOrder(req, "test-token");
 
         assertThat(response.id()).isEqualTo(orderId);
         assertThat(response.status()).isEqualTo(OrderStatus.PENDING);
@@ -103,16 +114,57 @@ class OrderServiceTest {
 
         when(orderRepository.findByIdempotencyKey("idem-key-1")).thenReturn(Optional.of(sampleOrder));
 
-        OrderResponse response = orderService.placeOrder(req);
+        OrderResponse response = orderService.placeOrder(req, "test-token");
 
         assertThat(response.id()).isEqualTo(orderId);
         verify(orderRepository, never()).save(any());
         verify(kafkaProducerService, never()).publishOrderPlaced(any());
+        // Validation should not be called when idempotency key already exists
+        verify(productValidationService, never()).validateProductsAndStock(any(), any());
     }
 
-    // -------------------------------------------------------------------------
+    @Test
+    void placeOrder_stockValidationFails_throwsIllegalArgumentException() {
+        PlaceOrderRequest req = new PlaceOrderRequest(
+                userId,
+                List.of(new OrderItemDto("prod-1", "Widget", 10, new BigDecimal("10.00"))),
+                "123 Main St",
+                "idem-key-new"
+        );
+
+        when(orderRepository.findByIdempotencyKey("idem-key-new")).thenReturn(Optional.empty());
+        when(productValidationService.validateProductsAndStock(any(), eq("test-token"))).thenReturn(false);
+
+        assertThatThrownBy(() -> orderService.placeOrder(req, "test-token"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unavailable or out of stock");
+
+        verify(orderRepository, never()).save(any());
+        verify(kafkaProducerService, never()).publishOrderPlaced(any());
+    }
+
+    @Test
+    void placeOrder_nullBearerToken_skipsValidationAndSaves() {
+        PlaceOrderRequest req = new PlaceOrderRequest(
+                userId,
+                List.of(new OrderItemDto("prod-1", "Widget", 2, new BigDecimal("10.00"))),
+                "123 Main St",
+                "idem-key-no-token"
+        );
+
+        when(orderRepository.findByIdempotencyKey("idem-key-no-token")).thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenReturn(sampleOrder);
+
+        OrderResponse response = orderService.placeOrder(req, null);
+
+        assertThat(response.id()).isEqualTo(orderId);
+        verify(productValidationService, never()).validateProductsAndStock(any(), any());
+        verify(orderRepository).save(any(Order.class));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // getOrder
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     void getOrder_asOwner_returnsOrder() {
@@ -148,9 +200,9 @@ class OrderServiceTest {
                 .isInstanceOf(OrderNotFoundException.class);
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // updateStatus
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     void updateStatus_validTransition_pendingToConfirmed() {
@@ -173,9 +225,9 @@ class OrderServiceTest {
                 .hasMessageContaining("Invalid status transition");
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // cancelOrder
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     void cancelOrder_fromPending_cancelsAndPublishesEvent() {

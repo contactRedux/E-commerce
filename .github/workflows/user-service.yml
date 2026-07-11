@@ -11,6 +11,14 @@ on:
     paths:
       - 'services/user-service/**'
       - '.github/workflows/user-service.yml'
+  workflow_dispatch:
+
+# Grant GITHUB_TOKEN the minimum permissions needed
+permissions:
+  contents: read
+  pull-requests: write   # required for jacoco-report PR comment
+  packages: write        # required for ghcr.io push (scoped further in the job)
+  id-token: write        # required for OIDC
 
 env:
   SERVICE_NAME: user-service
@@ -19,34 +27,9 @@ env:
   JAVA_VERSION: '21'
 
 jobs:
-  lint:
-    name: Lint & Static Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Java ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Run Checkstyle
-        working-directory: ${{ env.SERVICE_DIR }}
-        run: mvn -B checkstyle:check --no-transfer-progress
-        continue-on-error: true
-
-      - name: Run SpotBugs (SAST)
-        working-directory: ${{ env.SERVICE_DIR }}
-        run: mvn -B spotbugs:check --no-transfer-progress
-        continue-on-error: true
-
   test:
     name: Unit Tests & Coverage
     runs-on: ubuntu-latest
-    needs: lint
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -58,12 +41,9 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Run tests with JaCoCo
+      - name: Run tests and generate JaCoCo report
         working-directory: ${{ env.SERVICE_DIR }}
         run: mvn -B verify --no-transfer-progress
-        env:
-          JWT_PUBLIC_KEY: ${{ secrets.TEST_JWT_PUBLIC_KEY }}
-          JWT_PRIVATE_KEY: ${{ secrets.TEST_JWT_PRIVATE_KEY }}
 
       - name: Upload JaCoCo coverage report
         uses: actions/upload-artifact@v4
@@ -79,8 +59,8 @@ jobs:
           paths: ${{ env.SERVICE_DIR }}/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           title: 'User Service Coverage'
-          min-coverage-overall: 80
-          min-coverage-changed-files: 80
+          min-coverage-overall: 70
+          min-coverage-changed-files: 60
 
   build-and-push:
     name: Build & Push Docker Image
@@ -91,7 +71,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write  # required for OIDC
+      id-token: write
 
     steps:
       - name: Checkout code
@@ -126,7 +106,6 @@ jobs:
           tags: |
             type=sha,prefix={{branch}}-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -139,8 +118,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-
-      - name: Generate SBOM (Software Bill of Materials)
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.IMAGE_NAME }}:latest

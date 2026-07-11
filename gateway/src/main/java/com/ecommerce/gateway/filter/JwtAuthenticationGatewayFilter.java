@@ -49,11 +49,12 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
      * matches the {@code /auth} entry, etc.
      */
     private static final Set<String> PUBLIC_PATHS = Set.of(
-        "/auth/register",
-        "/auth/login",
-        "/auth/refresh",
-        "/auth/public-key",
-        "/payments/webhook",
+        "/v1/auth/register",
+        "/v1/auth/login",
+        "/v1/auth/refresh",
+        "/v1/auth/public-key",
+        "/v1/payments/webhook",
+        "/fallback",
         "/actuator",
         "/docs"
     );

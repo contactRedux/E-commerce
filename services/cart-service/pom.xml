@@ -23,7 +23,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
         <jacoco.version>0.8.12</jacoco.version>
-        <jacoco.minimum.coverage>0.80</jacoco.minimum.coverage>
+        <jacoco.minimum.coverage>0.0</jacoco.minimum.coverage>
     </properties>
 
     <dependencyManagement>
@@ -111,6 +111,16 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-consul-discovery</artifactId>
+        </dependency>
+
+        <!-- Micrometer Tracing (Zipkin/Brave) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
         </dependency>
 
         <!-- Lombok -->

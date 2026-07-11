@@ -13,14 +13,17 @@ spring:
       config:
         enabled: false
 
+# TEST-ONLY RSA keypair — safe to commit, never used in production
 jwt:
-  public-key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu6OKp3utEwd8KKVSwog0\
-TsQxIg9rRy816r1dBj638SzG/23VZitlN2BnzQLSaVC+O1EpQvHyTBxX/H9hkgRR\
-1kO2+Fu6xYbxgSkcKUJxYysaMlSU7FluXAfQSeIO3E2iyUJ3yNBS7gEZ4+cUCUjB\
-YA7yg38poRWBATqN8ip+5l9A4+S2CwZRR4xagTEVj/q0iB0krOQgUk/Kq2ZNy4F+\
-2eIw+w1MRd05xEKoCj4jfEWS7g+pl/TShRe2HTNFdgSNBC19ykjd4oVtyRw5X+Rt\
-0KzuggxIHx5d35KoTxbjTJBUECTOQ6ly4kfiVe0FVI+Phyu6/0SljEgaAPQMuQID\
-AQAB"
+  public-key: |
+    -----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtzPoHfRikAeQdx4R5aE0
+    sSfhN49F/KRBgHyc41+sz+i0Hvuy8dHOxysQ1fUOnlt5s1dYRz76SwSa89Khs1zi
+    /GyBYCYfhlO7VTG1GRM+Sju21/tiyoC4120NhRB4dyY8TxUOjdguRpBNI1UVc5pN
+    U/GbBiW+lwd3jVU43FPQmVxelSoESYwaS3SPzUQTdDsApL+Kv7NweMMApp1k1P2Q
+    CMNQPSfu/wvM950IWbj96i8mO2faT60CcuRe7/GE5Optkd00BoFYtjo0/lYAS1S2
+    1ZgndlxJtyqmyROFT2l0Y1Oc+Mfh4/aSH81tchROzOB8ZS1m7M9UYN6QIDAQAB
+    -----END PUBLIC KEY-----
 
 management:
   endpoints:

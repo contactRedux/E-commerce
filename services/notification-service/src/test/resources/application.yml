@@ -1,11 +1,16 @@
 spring:
+  application:
+    name: notification-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
   cloud:
     consul:
       enabled: false
       discovery:
         enabled: false
-  kafka:
-    bootstrap-servers: localhost:9092
+      config:
+        enabled: false
 
 sendgrid:
   api-key: SG.test-placeholder

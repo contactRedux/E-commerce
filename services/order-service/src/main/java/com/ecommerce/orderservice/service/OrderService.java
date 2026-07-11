@@ -28,13 +28,30 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final KafkaProducerService kafkaProducerService;
+    private final ProductValidationService productValidationService;
 
-    public OrderResponse placeOrder(PlaceOrderRequest req) {
+    /**
+     * Places a new order.
+     *
+     * @param req         the order placement request
+     * @param bearerToken JWT token forwarded from the HTTP request (used for
+     *                    inter-service product validation via the gateway)
+     */
+    public OrderResponse placeOrder(PlaceOrderRequest req, String bearerToken) {
         // Idempotency: return existing order if same key already exists
         Optional<Order> existing = orderRepository.findByIdempotencyKey(req.idempotencyKey());
         if (existing.isPresent()) {
             log.info("Idempotent order request for key={}", req.idempotencyKey());
             return mapToResponse(existing.get());
+        }
+
+        // Validate stock via Product Service (circuit-breaker protected — falls back to true)
+        if (bearerToken != null && !bearerToken.isBlank()) {
+            boolean valid = productValidationService.validateProductsAndStock(req.items(), bearerToken);
+            if (!valid) {
+                throw new IllegalArgumentException(
+                        "One or more products are unavailable or out of stock");
+            }
         }
 
         Order order = new Order();
