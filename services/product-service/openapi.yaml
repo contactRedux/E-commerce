@@ -1,0 +1,692 @@
+openapi: 3.0.3
+info:
+  title: Product Catalog Service API
+  description: |
+    REST API for the Product Catalog Service. Provides CRUD for products and categories,
+    inventory tracking, full-text search, filtering, and pagination.
+    Write operations require a valid RS256 JWT Bearer token with ROLE_ADMIN or ROLE_SERVICE.
+  version: 1.0.0
+  contact:
+    name: E-Commerce Platform Team
+
+servers:
+  - url: http://localhost:8082
+    description: Local development
+
+tags:
+  - name: Products
+    description: Product management endpoints
+  - name: Categories
+    description: Category management endpoints
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256-signed JWT issued by the User Service. Required for write operations.
+
+  schemas:
+    ApiResponseProduct:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          $ref: '#/components/schemas/ProductResponse'
+        message:
+          type: string
+          nullable: true
+
+    ApiResponsePagedProducts:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          $ref: '#/components/schemas/PagedProductResponse'
+        message:
+          type: string
+          nullable: true
+
+    ApiResponseCategory:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          $ref: '#/components/schemas/CategoryResponse'
+        message:
+          type: string
+          nullable: true
+
+    ApiResponseCategories:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+        message:
+          type: string
+          nullable: true
+
+    ApiResponseError:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        data:
+          nullable: true
+        message:
+          type: string
+          example: Product not found with id: abc123
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "64f1a2b3c4d5e6f7a8b9c0d1"
+        name:
+          type: string
+          example: "MacBook Pro 14"
+        description:
+          type: string
+          nullable: true
+          example: "Apple M3 Pro chip, 18GB RAM"
+        price:
+          type: number
+          format: decimal
+          example: 1999.99
+        categoryId:
+          type: string
+          nullable: true
+          example: "64f1a2b3c4d5e6f7a8b9c0aa"
+        stockQuantity:
+          type: integer
+          example: 25
+        imageUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/products/macbook.jpg"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            color: "Space Gray"
+            storage: "512GB"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PagedProductResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 150
+
+    CreateProductRequest:
+      type: object
+      required:
+        - name
+        - price
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: "MacBook Pro 14"
+        description:
+          type: string
+          nullable: true
+        price:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 1999.99
+        categoryId:
+          type: string
+          nullable: true
+        stockQuantity:
+          type: integer
+          minimum: 0
+          default: 0
+        imageUrl:
+          type: string
+          nullable: true
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        price:
+          type: number
+          format: decimal
+          minimum: 0
+          nullable: true
+        categoryId:
+          type: string
+          nullable: true
+        stockQuantity:
+          type: integer
+          minimum: 0
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    StockUpdateRequest:
+      type: object
+      required:
+        - delta
+      properties:
+        delta:
+          type: integer
+          description: Amount to add (positive) or subtract (negative) from current stock
+          example: -5
+
+    CategoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "64f1a2b3c4d5e6f7a8b9c0aa"
+        name:
+          type: string
+          example: "Laptops"
+        description:
+          type: string
+          nullable: true
+        parentCategoryId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateCategoryRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: "Laptops"
+        description:
+          type: string
+          nullable: true
+        parentCategoryId:
+          type: string
+          nullable: true
+
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        parentCategoryId:
+          type: string
+          nullable: true
+
+paths:
+  /products:
+    get:
+      summary: Search / list products
+      description: |
+        Returns a paginated list of products. All query parameters are optional and can be combined.
+        This endpoint is public — no authentication required.
+      operationId: searchProducts
+      tags: [Products]
+      parameters:
+        - name: name
+          in: query
+          description: Case-insensitive substring filter on product name
+          required: false
+          schema:
+            type: string
+          example: "laptop"
+        - name: categoryId
+          in: query
+          description: Filter by category ID
+          required: false
+          schema:
+            type: string
+        - name: inStockOnly
+          in: query
+          description: When true, only return products with stockQuantity > 0
+          required: false
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          description: Zero-based page number
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Page size (max items per page)
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePagedProducts'
+    post:
+      summary: Create a new product
+      description: Creates a product. Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: createProduct
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseProduct'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /products/{id}:
+    get:
+      summary: Get product by ID
+      description: Returns a single product. Public — no authentication required.
+      operationId: getProduct
+      tags: [Products]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseProduct'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+    put:
+      summary: Update a product
+      description: Updates product fields. Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: updateProduct
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseProduct'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+    delete:
+      summary: Delete a product
+      description: Deletes a product by ID. Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: deleteProduct
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Product deleted
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /products/{id}/stock:
+    put:
+      summary: Update product stock quantity
+      description: |
+        Applies a stock delta (positive = restock, negative = decrement).
+        Stock quantity will never go below 0 — a 400 is returned if the delta would result in negative stock.
+        Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: updateStock
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockUpdateRequest'
+      responses:
+        '200':
+          description: Stock updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseProduct'
+        '400':
+          description: Insufficient stock or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /categories:
+    get:
+      summary: List all categories
+      description: Returns all categories. Public — no authentication required.
+      operationId: getCategories
+      tags: [Categories]
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCategories'
+    post:
+      summary: Create a category
+      description: Creates a new category. Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: createCategory
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCategory'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /categories/{id}:
+    get:
+      summary: Get category by ID
+      description: Returns a single category. Public — no authentication required.
+      operationId: getCategory
+      tags: [Categories]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCategory'
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+    put:
+      summary: Update a category
+      description: Updates category fields. Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: updateCategory
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryRequest'
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCategory'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+    delete:
+      summary: Delete a category
+      description: |
+        Deletes a category. Returns 400 if any products still reference this category.
+        Requires ROLE_ADMIN or ROLE_SERVICE.
+      operationId: deleteCategory
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Category deleted
+        '400':
+          description: Category still referenced by products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'

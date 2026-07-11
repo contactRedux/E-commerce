@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Console appender with Logstash JSON encoding -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"gateway"}</customFields>
+            <includeMdc>true</includeMdc>
+        </encoder>
+    </appender>
+
+    <!-- TCP appender to Logstash — falls back gracefully if Logstash is unreachable -->
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST:-logstash}:${LOGSTASH_PORT:-5000}</destination>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"gateway"}</customFields>
+            <includeMdc>true</includeMdc>
+        </encoder>
+        <connectionStrategy>
+            <roundRobin>
+                <connectionTTL>5 minutes</connectionTTL>
+            </roundRobin>
+        </connectionStrategy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOGSTASH"/>
+    </root>
+
+    <!-- Verbose gateway package logging in DEBUG for local development -->
+    <logger name="com.ecommerce.gateway" level="DEBUG"/>
+
+    <!-- Reduce noise from Spring Cloud Gateway and Security -->
+    <logger name="org.springframework.cloud.gateway" level="INFO"/>
+    <logger name="org.springframework.security"       level="WARN"/>
+    <logger name="reactor.netty"                      level="WARN"/>
+
+</configuration>

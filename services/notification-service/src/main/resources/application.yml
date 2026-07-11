@@ -1,0 +1,51 @@
+server:
+  port: ${NOTIFICATION_SERVICE_PORT:8086}
+
+spring:
+  application:
+    name: notification-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  cloud:
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        enabled: true
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        instance-id: ${spring.application.name}-${server.port}
+      config:
+        enabled: false
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:SG.placeholder}
+
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:ACplaceholder}
+  auth-token: ${TWILIO_AUTH_TOKEN:placeholder}
+  from-number: ${TWILIO_FROM_NUMBER:+15005550006}
+
+notification:
+  from-email: ${NOTIFICATION_FROM_EMAIL:noreply@ecommerce.local}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  config: classpath:logback-spring.xml

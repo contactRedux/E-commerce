@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"cart-service"}</customFields>
+            <includeMdc>true</includeMdc>
+        </encoder>
+    </appender>
+
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST:-logstash}:${LOGSTASH_PORT:-5000}</destination>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"cart-service"}</customFields>
+            <includeMdc>true</includeMdc>
+        </encoder>
+        <connectionStrategy>
+            <roundRobin>
+                <connectionTTL>5 minutes</connectionTTL>
+            </roundRobin>
+        </connectionStrategy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOGSTASH"/>
+    </root>
+
+    <logger name="com.ecommerce.cartservice" level="DEBUG"/>
+    <logger name="org.springframework.security" level="WARN"/>
+
+</configuration>

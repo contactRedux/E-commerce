@@ -1,0 +1,340 @@
+openapi: 3.0.3
+info:
+  title: Cart Service API
+  description: Shopping Cart Service — Redis-backed per-user cart with TTL-based expiration.
+  version: 1.0.0
+  contact:
+    name: E-Commerce Platform Team
+
+servers:
+  - url: http://localhost:8083
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256-signed JWT issued by the User Service.
+
+  schemas:
+    CartItem:
+      type: object
+      properties:
+        productId:
+          type: string
+          example: "prod-abc123"
+        productName:
+          type: string
+          example: "Wireless Headphones"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        unitPrice:
+          type: number
+          format: decimal
+          example: 49.99
+        subtotal:
+          type: number
+          format: decimal
+          example: 99.98
+      required:
+        - productId
+        - productName
+        - quantity
+        - unitPrice
+        - subtotal
+
+    Cart:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "user-xyz789"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        totalAmount:
+          type: number
+          format: decimal
+          example: 99.98
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-07-15T10:30:00"
+      required:
+        - userId
+        - items
+        - totalAmount
+        - updatedAt
+
+    AddItemRequest:
+      type: object
+      required:
+        - productId
+        - productName
+        - quantity
+        - unitPrice
+      properties:
+        productId:
+          type: string
+          minLength: 1
+          example: "prod-abc123"
+        productName:
+          type: string
+          minLength: 1
+          example: "Wireless Headphones"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        unitPrice:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 49.99
+
+    UpdateItemRequest:
+      type: object
+      required:
+        - quantity
+      properties:
+        quantity:
+          type: integer
+          minimum: 0
+          description: New quantity. Set to 0 to remove the item from the cart.
+          example: 3
+
+    ApiResponseCart:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          example: "success"
+        data:
+          $ref: '#/components/schemas/Cart'
+        message:
+          type: string
+          nullable: true
+
+    ApiResponseError:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: "error"
+        data:
+          nullable: true
+          default: null
+        message:
+          type: string
+          example: "Cart item not found for productId: prod-xyz"
+
+paths:
+  /cart/{userId}:
+    get:
+      summary: Get cart for a user
+      description: Returns the current cart for the specified user. Returns an empty cart if none exists. Callers must own the cart (JWT sub must match userId) or hold ROLE_ADMIN.
+      operationId: getCart
+      tags:
+        - Cart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "user-xyz789"
+      responses:
+        '200':
+          description: Cart retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCart'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Forbidden — authenticated user does not own this cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+    delete:
+      summary: Clear (delete) a user's cart
+      description: Removes the entire cart from Redis. Idempotent — succeeds even if the cart does not exist.
+      operationId: clearCart
+      tags:
+        - Cart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cart cleared successfully (no content)
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /cart/{userId}/items:
+    post:
+      summary: Add an item to the cart
+      description: Adds a product to the cart. If the product already exists, increments the quantity. Resets the cart TTL.
+      operationId: addItem
+      tags:
+        - Cart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddItemRequest'
+      responses:
+        '200':
+          description: Item added; returns updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCart'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /cart/{userId}/items/{productId}:
+    put:
+      summary: Update quantity of a cart item
+      description: Updates the quantity of a specific product in the cart. Setting quantity to 0 removes the item. Resets the cart TTL.
+      operationId: updateItem
+      tags:
+        - Cart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItemRequest'
+      responses:
+        '200':
+          description: Item updated; returns updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCart'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '404':
+          description: Product not found in cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+    delete:
+      summary: Remove a specific item from the cart
+      description: Removes a product from the cart by productId. Resets the cart TTL. Idempotent if product is not in the cart.
+      operationId: removeItem
+      tags:
+        - Cart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item removed; returns updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCart'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+  <springProperty scope="context" name="SERVICE_NAME" source="spring.application.name" defaultValue="order-service"/>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>{"service":"${SERVICE_NAME}"}</customFields>
+      <fieldNames>
+        <timestamp>timestamp</timestamp>
+        <version>[ignore]</version>
+        <levelValue>[ignore]</levelValue>
+      </fieldNames>
+    </encoder>
+  </appender>
+
+  <springProfile name="!test">
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+    <logger name="com.ecommerce.orderservice" level="DEBUG"/>
+  </springProfile>
+
+  <springProfile name="test">
+    <appender name="TEST_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+      </encoder>
+    </appender>
+    <root level="WARN">
+      <appender-ref ref="TEST_CONSOLE"/>
+    </root>
+    <logger name="com.ecommerce.orderservice" level="INFO"/>
+  </springProfile>
+
+</configuration>

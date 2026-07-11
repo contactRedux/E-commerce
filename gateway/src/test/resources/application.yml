@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: gateway-test
+  autoconfigure:
+    exclude:
+      # Disable Redis auto-configuration in tests — no real Redis needed
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+  cloud:
+    consul:
+      enabled: false
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+    gateway:
+      routes: []
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 0
+  ssl:
+    enabled: false
+
+jwt:
+  public-key: ""
+
+allowed:
+  origins: "http://localhost:3000"

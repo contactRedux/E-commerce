@@ -1,0 +1,397 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: |
+    Payment Service for the Scalable E-Commerce Platform.
+    Supports Stripe (primary) and PayPal (secondary) payment gateways.
+    
+    **Security notes:**
+    - All endpoints except `POST /payments/webhook/stripe` and `GET /actuator/**` require a valid JWT Bearer token.
+    - The Stripe webhook endpoint uses Stripe HMAC-SHA256 signature verification (`Stripe-Signature` header) instead of JWT.
+    - The `gatewayClientSecret` field is **write-only**: it is only returned in the creation response and never in subsequent fetches.
+  version: 1.0.0
+  contact:
+    name: E-Commerce Platform Team
+
+servers:
+  - url: http://localhost:8085
+    description: Local development server
+
+tags:
+  - name: Stripe
+    description: Stripe payment operations
+  - name: PayPal
+    description: PayPal payment operations
+  - name: Payments
+    description: General payment operations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256-signed JWT issued by the User Service
+
+  schemas:
+    CreatePaymentIntentRequest:
+      type: object
+      required: [orderId, userId, amount, currency, idempotencyKey]
+      properties:
+        orderId:
+          type: string
+          example: "order-abc-123"
+        userId:
+          type: string
+          example: "user-xyz-456"
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 49.99
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: "USD"
+        idempotencyKey:
+          type: string
+          description: Unique key to prevent duplicate charges on retries.
+          example: "idem-uuid-here"
+
+    CreatePayPalOrderRequest:
+      type: object
+      required: [orderId, userId, amount, currency, idempotencyKey]
+      properties:
+        orderId:
+          type: string
+          example: "order-abc-123"
+        userId:
+          type: string
+          example: "user-xyz-456"
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 49.99
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: "USD"
+        idempotencyKey:
+          type: string
+          example: "idem-uuid-here"
+
+    PaymentIntentResponse:
+      type: object
+      properties:
+        gatewayPaymentId:
+          type: string
+          description: Stripe PaymentIntent ID (pi_...) or PayPal Order ID.
+          example: "pi_3NdXp5CmO8hy2Yxx1j3K4LmP"
+        clientSecret:
+          type: string
+          writeOnly: true
+          description: |
+            Stripe client_secret for front-end confirmation via Stripe.js.
+            **Write-only**: only present in the creation response, never returned on subsequent reads.
+            Null for PayPal payments.
+          example: "pi_3NdXp5CmO8hy2Yxx1j3K4LmP_secret_xxxxxx"
+        status:
+          type: string
+          enum: [PENDING, SUCCEEDED, FAILED, REFUNDED]
+          example: "PENDING"
+
+    PaymentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        orderId:
+          type: string
+          example: "order-abc-123"
+        gateway:
+          type: string
+          enum: [STRIPE, PAYPAL]
+          example: "STRIPE"
+        gatewayPaymentId:
+          type: string
+          example: "pi_3NdXp5CmO8hy2Yxx1j3K4LmP"
+        amount:
+          type: number
+          format: decimal
+          example: 49.99
+        currency:
+          type: string
+          example: "USD"
+        status:
+          type: string
+          enum: [PENDING, SUCCEEDED, FAILED, REFUNDED]
+          example: "SUCCEEDED"
+        failureReason:
+          type: string
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ApiResponseSuccess:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        data:
+          type: object
+        message:
+          type: string
+          nullable: true
+
+    ApiResponseError:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        data:
+          nullable: true
+        message:
+          type: string
+          example: "Payment not found for orderId: order-123"
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+    NotFound:
+      description: Payment not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+    UnprocessableEntity:
+      description: Payment processing error (e.g. gateway failure, wrong state for refund).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+    BadRequest:
+      description: Validation error on the request body.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+
+security:
+  - BearerAuth: []
+
+paths:
+  /payments/stripe/intent:
+    post:
+      tags: [Stripe]
+      summary: Create a Stripe PaymentIntent
+      description: |
+        Creates a Stripe PaymentIntent and returns the `client_secret` needed for front-end
+        confirmation via Stripe.js or a mobile SDK. Idempotent on `idempotencyKey`.
+      operationId: createStripeIntent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentIntentRequest'
+      responses:
+        '201':
+          description: PaymentIntent created successfully.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PaymentIntentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /payments/paypal/order:
+    post:
+      tags: [PayPal]
+      summary: Create a PayPal Order
+      description: |
+        Creates a PayPal Order via the PayPal Orders API v2. Returns the PayPal Order ID.
+        The client must redirect the buyer to PayPal for approval, then call the capture endpoint.
+        Idempotent on `idempotencyKey`.
+      operationId: createPayPalOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayPalOrderRequest'
+      responses:
+        '201':
+          description: PayPal order created successfully.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PaymentIntentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /payments/paypal/capture/{paypalOrderId}:
+    post:
+      tags: [PayPal]
+      summary: Capture an approved PayPal Order
+      description: |
+        Captures a PayPal Order after the buyer has approved it on PayPal.
+        Updates payment status to SUCCEEDED and publishes a Kafka event.
+      operationId: capturePayPalOrder
+      parameters:
+        - name: paypalOrderId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "1AB23456CD789012E"
+      responses:
+        '200':
+          description: PayPal order captured successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /payments/webhook/stripe:
+    post:
+      tags: [Stripe]
+      summary: Stripe webhook receiver
+      description: |
+        Receives webhook events from Stripe. **No JWT required** — authentication is performed
+        via Stripe's HMAC-SHA256 signature in the `Stripe-Signature` header.
+        
+        Handles:
+        - `payment_intent.succeeded` → marks payment as SUCCEEDED, publishes Kafka event
+        - `payment_intent.payment_failed` → marks payment as FAILED
+      operationId: stripeWebhook
+      security: []
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Stripe webhook signature for HMAC verification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe event payload (do not log).
+      responses:
+        '200':
+          description: Webhook processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseSuccess'
+        '422':
+          description: Invalid Stripe signature or processing error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /payments/{id}/refund:
+    post:
+      tags: [Payments]
+      summary: Refund a Stripe payment
+      description: |
+        Initiates a full refund for a SUCCEEDED Stripe payment.
+        PayPal refunds are not yet supported (requires capture ID — noted as future work).
+        Only the payment owner or an ADMIN should call this endpoint.
+      operationId: refundPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Refund initiated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /payments/order/{orderId}:
+    get:
+      tags: [Payments]
+      summary: Get payment by order ID
+      description: |
+        Returns payment details for the given order. The `gatewayClientSecret` field is
+        **never** returned on this endpoint for security reasons.
+      operationId: getPaymentByOrderId
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "order-abc-123"
+      responses:
+        '200':
+          description: Payment found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'

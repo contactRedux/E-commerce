@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: cart-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+  cloud:
+    consul:
+      enabled: false
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+
+jwt:
+  public-key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu6OKp3utEwd8KKVSwog0\
+TsQxIg9rRy816r1dBj638SzG/23VZitlN2BnzQLSaVC+O1EpQvHyTBxX/H9hkgRR\
+1kO2+Fu6xYbxgSkcKUJxYysaMlSU7FluXAfQSeIO3E2iyUJ3yNBS7gEZ4+cUCUjB\
+YA7yg38poRWBATqN8ip+5l9A4+S2CwZRR4xagTEVj/q0iB0krOQgUk/Kq2ZNy4F+\
+2eIw+w1MRd05xEKoCj4jfEWS7g+pl/TShRe2HTNFdgSNBC19ykjd4oVtyRw5X+Rt\
+0KzuggxIHx5d35KoTxbjTJBUECTOQ6ly4kfiVe0FVI+Phyu6/0SljEgaAPQMuQID\
+AQAB"
+
+cart:
+  ttl-days: 7

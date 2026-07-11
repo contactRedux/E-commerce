@@ -1,0 +1,448 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E-Commerce Platform — Root Docker Compose
+# All secrets/passwords come from env_file: .env  (copy .env.example → .env)
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  ecommerce-net:
+    driver: bridge
+
+volumes:
+  postgres_user_data:
+  postgres_order_data:
+  postgres_payment_data:
+  mongo_data:
+  redis_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+
+  # ── Zookeeper ───────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    networks:
+      - ecommerce-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Kafka ────────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    networks:
+      - ecommerce-net
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CREATE_TOPICS: "order.placed:1:1,payment.processed:1:1,order.status.updated:1:1"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── PostgreSQL — User Service ─────────────────────────────────────────────────
+  postgres-user:
+    image: postgres:16-alpine
+    container_name: postgres-user
+    networks:
+      - ecommerce-net
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${USER_DB_NAME}
+      POSTGRES_USER: ${USER_DB_USER}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+    volumes:
+      - postgres_user_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d ${USER_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL — Order Service ────────────────────────────────────────────────
+  postgres-order:
+    image: postgres:16-alpine
+    container_name: postgres-order
+    networks:
+      - ecommerce-net
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${ORDER_DB_NAME}
+      POSTGRES_USER: ${ORDER_DB_USER}
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD}
+    volumes:
+      - postgres_order_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ORDER_DB_USER} -d ${ORDER_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL — Payment Service ──────────────────────────────────────────────
+  postgres-payment:
+    image: postgres:16-alpine
+    container_name: postgres-payment
+    networks:
+      - ecommerce-net
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${PAYMENT_DB_NAME}
+      POSTGRES_USER: ${PAYMENT_DB_USER}
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD}
+    volumes:
+      - postgres_payment_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PAYMENT_DB_USER} -d ${PAYMENT_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MongoDB — Product Service ─────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: mongo
+    networks:
+      - ecommerce-net
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Redis — Cart & Gateway Rate Limiter ───────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    networks:
+      - ecommerce-net
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Consul ────────────────────────────────────────────────────────────────────
+  consul:
+    image: hashicorp/consul:1.18
+    container_name: consul
+    networks:
+      - ecommerce-net
+    ports:
+      - "8500:8500"
+    command: >
+      agent -server -bootstrap-expect=1 -ui
+      -client=0.0.0.0 -bind=0.0.0.0
+      -config-file=/consul/config/consul.hcl
+    volumes:
+      - ./infrastructure/consul/consul.hcl:/consul/config/consul.hcl:ro
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Elasticsearch ─────────────────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elasticsearch
+    networks:
+      - ecommerce-net
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./infrastructure/elk/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qv '\"status\":\"red\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── Logstash ──────────────────────────────────────────────────────────────────
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.4
+    container_name: logstash
+    networks:
+      - ecommerce-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    volumes:
+      - ./infrastructure/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+
+  # ── Kibana ────────────────────────────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: kibana
+    networks:
+      - ecommerce-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5601:5601"
+    volumes:
+      - ./infrastructure/elk/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+
+  # ── Prometheus ────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    networks:
+      - ecommerce-net
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Grafana ───────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    networks:
+      - ecommerce-net
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infrastructure/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Application Services
+  # Images are built locally; in CI they are replaced with ghcr.io registry images.
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # ── User Service ──────────────────────────────────────────────────────────────
+  user-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/user-service:latest
+    build:
+      context: ./services/user-service
+    container_name: user-service
+    networks:
+      - ecommerce-net
+    depends_on:
+      postgres-user:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${USER_SERVICE_PORT:-8081}:8081"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ── Product Service ───────────────────────────────────────────────────────────
+  product-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/product-service:latest
+    build:
+      context: ./services/product-service
+    container_name: product-service
+    networks:
+      - ecommerce-net
+    depends_on:
+      mongo:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    ports:
+      - "${PRODUCT_SERVICE_PORT:-8082}:8082"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ── Cart Service ──────────────────────────────────────────────────────────────
+  cart-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/cart-service:latest
+    build:
+      context: ./services/cart-service
+    container_name: cart-service
+    networks:
+      - ecommerce-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    ports:
+      - "${CART_SERVICE_PORT:-8083}:8083"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ── Order Service ─────────────────────────────────────────────────────────────
+  order-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/order-service:latest
+    build:
+      context: ./services/order-service
+    container_name: order-service
+    networks:
+      - ecommerce-net
+    depends_on:
+      postgres-order:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    ports:
+      - "${ORDER_SERVICE_PORT:-8084}:8084"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8084/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ── Payment Service ───────────────────────────────────────────────────────────
+  payment-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/payment-service:latest
+    build:
+      context: ./services/payment-service
+    container_name: payment-service
+    networks:
+      - ecommerce-net
+    depends_on:
+      postgres-payment:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    ports:
+      - "${PAYMENT_SERVICE_PORT:-8085}:8085"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ── Notification Service ──────────────────────────────────────────────────────
+  notification-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/notification-service:latest
+    build:
+      context: ./services/notification-service
+    container_name: notification-service
+    networks:
+      - ecommerce-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8086}:8086"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8086/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ── API Gateway ───────────────────────────────────────────────────────────────
+  gateway:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-local}/gateway:latest
+    build:
+      context: ./gateway
+    container_name: gateway
+    networks:
+      - ecommerce-net
+    depends_on:
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      cart-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s

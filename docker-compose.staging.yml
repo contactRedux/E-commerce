@@ -1,0 +1,54 @@
+version: '3.8'
+
+# Staging override — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+#
+# Replaces local build contexts with pre-built ghcr.io images tagged with
+# the commit SHA produced by the CI/CD pipelines.
+#
+# Required environment variables:
+#   GITHUB_REPOSITORY_OWNER  — GitHub username or org (e.g. "myorg")
+#   IMAGE_TAG                — Git SHA tag written by CI (defaults to "latest")
+
+services:
+  user-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/user-service:${IMAGE_TAG:-latest}
+    build: ~  # disable local build in staging
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging
+
+  product-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/product-service:${IMAGE_TAG:-latest}
+    build: ~
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging
+
+  cart-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/cart-service:${IMAGE_TAG:-latest}
+    build: ~
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging
+
+  order-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/order-service:${IMAGE_TAG:-latest}
+    build: ~
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging
+
+  payment-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/payment-service:${IMAGE_TAG:-latest}
+    build: ~
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging
+
+  notification-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/notification-service:${IMAGE_TAG:-latest}
+    build: ~
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging
+
+  gateway:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/gateway:${IMAGE_TAG:-latest}
+    build: ~
+    environment:
+      - SPRING_PROFILES_ACTIVE=staging

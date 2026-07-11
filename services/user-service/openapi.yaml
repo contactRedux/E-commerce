@@ -1,0 +1,423 @@
+openapi: "3.0.3"
+info:
+  title: User Service API
+  description: |
+    Handles user registration, authentication (JWT/RS256), and profile management
+    for the Scalable E-Commerce Platform.
+  version: "1.0.0"
+  contact:
+    name: E-Commerce Platform Team
+
+servers:
+  - url: http://localhost:8081
+    description: Local development
+
+tags:
+  - name: auth
+    description: Registration and login
+  - name: users
+    description: User profile management
+
+paths:
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        "201":
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthApiResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "409":
+          $ref: '#/components/responses/ConflictError'
+        "422":
+          $ref: '#/components/responses/UnprocessableError'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Authenticate and receive a JWT
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthApiResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "404":
+          $ref: '#/components/responses/NotFoundError'
+
+  /auth/public-key:
+    get:
+      tags: [auth]
+      summary: Retrieve the RSA public key (PEM format) used to verify JWTs
+      operationId: getPublicKey
+      responses:
+        "200":
+          description: PEM-encoded RSA public key
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponseBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: string
+                        example: "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----"
+
+  /users/{id}:
+    get:
+      tags: [users]
+      summary: Get a user by ID
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApiResponse'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "403":
+          $ref: '#/components/responses/ForbiddenError'
+        "404":
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags: [users]
+      summary: Update a user's profile
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApiResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "403":
+          $ref: '#/components/responses/ForbiddenError'
+        "404":
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [users]
+      summary: Delete a user account
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        "204":
+          description: User deleted
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "403":
+          $ref: '#/components/responses/ForbiddenError'
+        "404":
+          $ref: '#/components/responses/NotFoundError'
+
+  /users:
+    get:
+      tags: [users]
+      summary: List all users (admin only)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            example: "createdAt,desc"
+      responses:
+        "200":
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedUserApiResponse'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "403":
+          $ref: '#/components/responses/ForbiddenError'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: User UUID
+
+  schemas:
+
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          example: "S3cur3P@ss!"
+        firstName:
+          type: string
+          maxLength: 100
+          example: Alice
+        lastName:
+          type: string
+          maxLength: 100
+          example: Smith
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          example: "S3cur3P@ss!"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          maxLength: 100
+          example: Alice
+        lastName:
+          type: string
+          maxLength: 100
+          example: Smith
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [ROLE_CUSTOMER, ROLE_ADMIN]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: RS256-signed JWT
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          description: Expiry in milliseconds
+          example: 86400000
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    ApiResponseBase:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        message:
+          type: string
+          nullable: true
+
+    AuthApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AuthResponse'
+
+    UserApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/UserResponse'
+
+    PagedUserApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/UserResponse'
+                page:
+                  type: integer
+                size:
+                  type: integer
+                totalElements:
+                  type: integer
+                  format: int64
+                totalPages:
+                  type: integer
+
+    ErrorApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              nullable: true
+              example: null
+
+  responses:
+
+    ValidationError:
+      description: Request body validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApiResponse'
+          example:
+            status: error
+            data: null
+            message: "Email must be valid; Password must be between 8 and 128 characters"
+
+    UnauthorizedError:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApiResponse'
+          example:
+            status: error
+            data: null
+            message: "Invalid credentials"
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApiResponse'
+          example:
+            status: error
+            data: null
+            message: "Access denied"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApiResponse'
+          example:
+            status: error
+            data: null
+            message: "User not found: <id>"
+
+    ConflictError:
+      description: Email already registered
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApiResponse'
+          example:
+            status: error
+            data: null
+            message: "Email already registered: alice@example.com"
+
+    UnprocessableError:
+      description: Unprocessable entity
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApiResponse'

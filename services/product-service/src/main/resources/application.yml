@@ -1,0 +1,41 @@
+server:
+  port: ${PRODUCT_SERVICE_PORT:8082}
+
+spring:
+  application:
+    name: product-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/productdb}
+      database: ${MONGO_DB_NAME:productdb}
+  cloud:
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        enabled: true
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        instance-id: ${spring.application.name}-${server.port}
+        prefer-ip-address: true
+      config:
+        enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+jwt:
+  public-key: ${JWT_PUBLIC_KEY:}
+
+logging:
+  config: classpath:logback-spring.xml

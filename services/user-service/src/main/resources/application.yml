@@ -1,0 +1,54 @@
+server:
+  port: ${USER_SERVICE_PORT:8081}
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:postgresql://${USER_DB_HOST:localhost}:${USER_DB_PORT:5432}/${USER_DB_NAME:userdb}
+    username: ${USER_DB_USER:userservice}
+    password: ${USER_DB_PASSWORD:changeme_user}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  cloud:
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        enabled: true
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        instance-id: ${spring.application.name}-${server.port}
+        prefer-ip-address: true
+      config:
+        enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+jwt:
+  private-key: ${JWT_PRIVATE_KEY:}
+  public-key: ${JWT_PUBLIC_KEY:}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+logging:
+  config: classpath:logback-spring.xml

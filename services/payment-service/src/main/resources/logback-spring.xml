@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="payment-service"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"${serviceName}"}</customFields>
+            <!-- CRITICAL: Do NOT log Stripe webhook payloads, API keys, client secrets, or card data -->
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- Suppress verbose framework noise -->
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="com.stripe" level="WARN"/>
+    <logger name="org.springframework.kafka" level="WARN"/>
+    <logger name="org.springframework.cloud.consul" level="WARN"/>
+
+    <springProfile name="default,dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+</configuration>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Commerce Platform — API Documentation</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #1f2328;
+            background: #ffffff;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px 80px;
+        }
+        h1 { font-size: 1.6rem; margin-bottom: 6px; }
+        .subtitle { color: #57606a; margin-bottom: 32px; }
+        h2 { font-size: 1rem; font-weight: 600; color: #57606a; text-transform: uppercase;
+             letter-spacing: 0.05em; margin: 32px 0 12px; }
+        .service {
+            background: #f7f8fa;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin-bottom: 10px;
+        }
+        .service-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+        .service-header h3 { font-size: 1rem; color: #1f2328; }
+        .badge {
+            background: #e5e7eb;
+            color: #57606a;
+            font-size: 12px;
+            padding: 1px 8px;
+            border-radius: 4px;
+            font-family: ui-monospace, monospace;
+        }
+        .service p { color: #57606a; font-size: 14px; margin-bottom: 8px; }
+        a { color: #3b82d4; text-decoration: none; font-size: 14px; }
+        a:hover { text-decoration: underline; }
+        .auth-note {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #5c4200;
+            margin-bottom: 24px;
+        }
+        .route-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .route-table th {
+            text-align: left;
+            padding: 8px 12px;
+            background: #f7f8fa;
+            border: 1px solid #e5e7eb;
+            color: #57606a;
+            font-weight: 600;
+        }
+        .route-table td {
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            font-family: ui-monospace, monospace;
+            font-size: 13px;
+        }
+        .route-table tr:hover td { background: #f7f8fa; }
+        hr { border: none; border-top: 1px solid #e5e7eb; margin: 40px 0 16px; }
+        footer { color: #57606a; font-size: 12px; }
+        footer a { font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>E-Commerce Platform — API Reference</h1>
+    <p class="subtitle">All requests flow through the API Gateway on port 8080 (HTTP) / 8443 (HTTPS).</p>
+
+    <div class="auth-note">
+        <strong>Authentication:</strong> All endpoints require an
+        <code>Authorization: Bearer &lt;token&gt;</code> header unless marked as public.
+        Tokens are issued by the User Service (<code>POST /auth/login</code>).
+    </div>
+
+    <h2>Services</h2>
+
+    <div class="service">
+        <div class="service-header">
+            <h3>User Service</h3>
+            <span class="badge">:8081</span>
+            <span class="badge">public: /auth/**</span>
+        </div>
+        <p>User registration, login, JWT issuance (RS256), and profile management.</p>
+        <a href="http://localhost:8081/openapi.yaml">OpenAPI Spec ↗</a>
+    </div>
+
+    <div class="service">
+        <div class="service-header">
+            <h3>Product Catalog Service</h3>
+            <span class="badge">:8082</span>
+        </div>
+        <p>Products, categories, inventory management, search, filtering, and pagination (MongoDB).</p>
+        <a href="http://localhost:8082/openapi.yaml">OpenAPI Spec ↗</a>
+    </div>
+
+    <div class="service">
+        <div class="service-header">
+            <h3>Shopping Cart Service</h3>
+            <span class="badge">:8083</span>
+        </div>
+        <p>Per-user cart management with Redis persistence and 7-day TTL.</p>
+        <a href="http://localhost:8083/openapi.yaml">OpenAPI Spec ↗</a>
+    </div>
+
+    <div class="service">
+        <div class="service-header">
+            <h3>Order Service</h3>
+            <span class="badge">:8084</span>
+        </div>
+        <p>Order placement, lifecycle management (PENDING → CONFIRMED → SHIPPED → DELIVERED), and history.</p>
+        <a href="http://localhost:8084/openapi.yaml">OpenAPI Spec ↗</a>
+    </div>
+
+    <div class="service">
+        <div class="service-header">
+            <h3>Payment Service</h3>
+            <span class="badge">:8085</span>
+            <span class="badge">public: /payments/webhook</span>
+        </div>
+        <p>Stripe payment intent creation, webhook handling (Stripe signature verification), and refunds.</p>
+        <a href="http://localhost:8085/openapi.yaml">OpenAPI Spec ↗</a>
+    </div>
+
+    <div class="service">
+        <div class="service-header">
+            <h3>Notification Service</h3>
+            <span class="badge">:8086</span>
+            <span class="badge">consumer-only</span>
+        </div>
+        <p>Event-driven email (SendGrid) and SMS (Twilio) notifications. No public REST API — Kafka consumer only.</p>
+    </div>
+
+    <h2>Gateway Route Map</h2>
+
+    <table class="route-table">
+        <thead>
+            <tr>
+                <th>Gateway Path</th>
+                <th>Upstream Service</th>
+                <th>Auth Required</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>/auth/**</td>       <td>user-service:8081</td>    <td>No (public)</td></tr>
+            <tr><td>/users/**</td>      <td>user-service:8081</td>    <td>Yes</td></tr>
+            <tr><td>/products/**</td>   <td>product-service:8082</td> <td>Yes (writes); No (reads)</td></tr>
+            <tr><td>/categories/**</td> <td>product-service:8082</td> <td>Yes (writes); No (reads)</td></tr>
+            <tr><td>/cart/**</td>       <td>cart-service:8083</td>    <td>Yes</td></tr>
+            <tr><td>/orders/**</td>     <td>order-service:8084</td>   <td>Yes</td></tr>
+            <tr><td>/payments/**</td>   <td>payment-service:8085</td> <td>Yes (except /webhook)</td></tr>
+            <tr><td>/actuator/**</td>   <td>gateway (local)</td>      <td>No (public)</td></tr>
+            <tr><td>/docs/**</td>       <td>gateway (static)</td>     <td>No (public)</td></tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <footer>
+        Infrastructure UIs:
+        <a href="http://localhost:8500">Consul</a> ·
+        <a href="http://localhost:5601">Kibana</a> ·
+        <a href="http://localhost:3000">Grafana</a> ·
+        <a href="http://localhost:9090">Prometheus</a>
+    </footer>
+</body>
+</html>
